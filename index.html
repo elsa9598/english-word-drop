@@ -4,7 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#0b1026">
-<title>영어 단어 낙하 타이핑 게임</title>
+<title>영단어 낙하 게임 · English Word Drop</title>
+<meta name="description" content="영어 단어가 떨어지면 한글 뜻을 입력! 10단계 난이도, 모바일·PC 지원 영어공부 타이핑 게임.">
+<!-- favicon: 인라인 SVG (외부 파일 없음) -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231b2350'/%3E%3Crect x='8' y='20' width='48' height='28' rx='6' fill='%232d3a72' stroke='%234cc9f0' stroke-width='3'/%3E%3Ctext x='32' y='41' font-size='22' font-weight='800' text-anchor='middle' fill='%23fff' font-family='sans-serif'%3EA%3C/text%3E%3C/svg%3E">
+<!-- 소셜 공유 미리보기 (썸네일) -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="영단어 낙하 게임 · English Word Drop">
+<meta property="og:description" content="영어 단어가 떨어지면 한글 뜻을 입력! 10단계, 모바일·PC 지원 영어공부 게임.">
+<meta property="og:url" content="https://elsa9598.github.io/english-word-drop/">
+<meta property="og:image" content="https://elsa9598.github.io/english-word-drop/thumbnail.svg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://elsa9598.github.io/english-word-drop/thumbnail.svg">
 <style>
   :root{
     --bg:#0b1026; --bg2:#111a3a; --accent:#4cc9f0; --accent2:#f72585;
@@ -31,8 +42,9 @@
   .stat span{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
   #lifeBar{flex:1;height:14px;border-radius:8px;background:rgba(255,255,255,.1);overflow:hidden;border:1px solid rgba(255,255,255,.12);}
   #lifeFill{height:100%;width:0%;background:linear-gradient(90deg,var(--good),var(--warn) 60%,var(--danger));transition:width .25s;}
-  #btnPause{margin-left:auto;background:rgba(255,255,255,.12);border:none;color:var(--text);
-    padding:6px 12px;border-radius:8px;font-size:14px;cursor:pointer;}
+  #btnPause,#btnMute{background:rgba(255,255,255,.12);border:none;color:var(--text);
+    padding:6px 10px;border-radius:8px;font-size:14px;cursor:pointer;}
+  #btnMute{margin-left:auto;}
 
   /* ===== PLAYFIELD ===== */
   #field{position:relative;flex:1;overflow:hidden;}
@@ -130,6 +142,7 @@
   <div class="stat"><b id="hScore">0</b><span>점수</span></div>
   <div class="stat"><b id="hBrick">0</b><span>벽돌</span></div>
   <div id="lifeBar"><div id="lifeFill"></div></div>
+  <button id="btnMute" title="소리 켜기/끄기">🔊</button>
   <button id="btnPause">⏸</button>
 </div>
 
@@ -202,6 +215,44 @@ const TIER = lv => lv<=2?1 : lv<=4?2 : lv<=7?3 : 4;
 const TIER_NAME = {1:"입문",2:"초급",3:"중급",4:"고급"};
 
 /* ============================================================
+   사운드 — Web Audio API로 효과음 합성 (외부 파일 0개, 오프라인)
+   ============================================================ */
+const Sound = (()=>{
+  let ctx=null, muted=false;
+  function ac(){ if(!ctx){ try{ctx=new (window.AudioContext||window.webkitAudioContext)();}catch(e){} } return ctx; }
+  function resume(){ const c=ac(); if(c&&c.state==='suspended') c.resume(); }
+  function tone(freq,dur,type,vol,slideTo,delay){
+    const c=ac(); if(!c||muted) return;
+    const t0=c.currentTime+(delay||0);
+    const o=c.createOscillator(), g=c.createGain();
+    o.type=type||'sine'; o.frequency.setValueAtTime(freq,t0);
+    if(slideTo) o.frequency.exponentialRampToValueAtTime(slideTo,t0+dur);
+    g.gain.setValueAtTime(vol||0.2,t0);
+    g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+    o.connect(g).connect(c.destination); o.start(t0); o.stop(t0+dur);
+  }
+  function noise(dur,vol){
+    const c=ac(); if(!c||muted) return;
+    const n=Math.floor(c.sampleRate*dur), buf=c.createBuffer(1,n,c.sampleRate), d=buf.getChannelData(0);
+    for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*(1-i/n);
+    const s=c.createBufferSource(); s.buffer=buf;
+    const g=c.createGain(); g.gain.setValueAtTime(vol||0.2,c.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001,c.currentTime+dur);
+    s.connect(g).connect(c.destination); s.start();
+  }
+  return {
+    resume,
+    pop(){ tone(660,0.12,'triangle',0.28,1400); noise(0.12,0.12); },
+    wrong(){ tone(190,0.16,'sawtooth',0.18,120); },
+    brick(){ tone(120,0.2,'square',0.3,60); noise(0.1,0.22); },
+    level(){ tone(523,0.1,'sine',0.22); tone(784,0.16,'sine',0.22,null,0.1); },
+    over(){ tone(440,0.25,'sine',0.28,110); tone(330,0.25,'sine',0.28,90,0.18); tone(220,0.5,'sine',0.28,70,0.36); },
+    toggleMute(){ muted=!muted; return muted; },
+    isMuted(){ return muted; }
+  };
+})();
+
+/* ============================================================
    상태
    ============================================================ */
 const field = document.getElementById('field');
@@ -242,6 +293,7 @@ function startGame(level){
   brickCol.innerHTML='';
   updateHUD();
   input.value=''; input.focus();
+  Sound.resume(); Sound.level();
   state.raf = requestAnimationFrame(loop);
 }
 
@@ -297,6 +349,7 @@ function loop(now){
 }
 
 function addBrick(b){
+  Sound.brick();
   state.bricks.push(b);
   state.deadWords.push({en:b.en,ko:b.ko});
   const br=document.createElement('div');
@@ -327,12 +380,14 @@ function submit(){
     updateHUD();
   } else {
     // 오답
+    Sound.wrong();
     input.classList.add('shake');
     setTimeout(()=>input.classList.remove('shake'),350);
   }
 }
 
 function popBlock(b){
+  Sound.pop();
   b.el.classList.add('pop');
   const rect=b.el.getBoundingClientRect();
   const fRect=field.getBoundingClientRect();
@@ -357,6 +412,7 @@ function popBlock(b){
 function gameOver(){
   state.running=false;
   cancelAnimationFrame(state.raf);
+  Sound.over();
   document.getElementById('finalScore').textContent=state.score;
   const list=document.getElementById('deadList');
   list.innerHTML='';
@@ -377,6 +433,11 @@ input.addEventListener('keydown',e=>{
   if(e.key==='Enter'){ e.preventDefault(); submit(); }
 });
 
+document.getElementById('btnMute').onclick=(e)=>{
+  const m=Sound.toggleMute();
+  e.currentTarget.textContent=m?'🔇':'🔊';
+  Sound.resume(); if(!m) Sound.level();
+};
 document.getElementById('btnPause').onclick=()=>{
   if(!state||!state.running) return;
   state.paused=true; show('pauseScreen');
