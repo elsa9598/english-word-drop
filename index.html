@@ -185,24 +185,13 @@
   <button class="bigbtn" id="btnAgain">다시 도전 🔁</button>
 </div>
 
+<script src="words.js"></script>
 <script>
 /* ============================================================
-   단어 데이터 — 영단어 : 허용 정답(한글 뜻) 배열
-   뜻이 여러 개인 단어는 배열에 모두 넣어 어느 하나라도 맞으면 정답.
-   10단계 = 4난이도 티어로 묶어 점점 어려워짐.
+   단어 데이터는 words.js 의 window.WORDS 에서 로드 (레벨별 50개)
+   형식: ["영단어", ["허용 한글 뜻1","뜻2",...]] — 아무 뜻이나 맞으면 정답
    ============================================================ */
-const WORDS = {
-  1:[["cat",["고양이"]],["dog",["개","강아지"]],["sun",["해","태양"]],["book",["책"]],["milk",["우유"]],["fish",["물고기","생선"]],["bird",["새"]],["tree",["나무"]],["star",["별"]],["rain",["비"]],["egg",["계란","달걀"]],["hand",["손"]],["foot",["발"]],["door",["문"]],["ball",["공"]],["king",["왕"]],["moon",["달"]],["bear",["곰"]]],
-  2:[["apple",["사과"]],["water",["물"]],["house",["집"]],["happy",["행복한","기쁜"]],["big",["큰","커다란"]],["small",["작은"]],["run",["달리다","뛰다"]],["eat",["먹다"]],["love",["사랑","사랑하다"]],["green",["초록","녹색"]],["white",["흰색","하얀"]],["black",["검정","까만"]],["fast",["빠른","빨리"]],["slow",["느린","천천히"]],["open",["열다","열린"]],["cold",["추운","차가운"]],["warm",["따뜻한"]],["sing",["노래하다"]]],
-  3:[["school",["학교"]],["friend",["친구"]],["family",["가족"]],["mother",["엄마","어머니"]],["father",["아빠","아버지"]],["window",["창문","창"]],["flower",["꽃"]],["orange",["오렌지","주황"]],["pretty",["예쁜","귀여운"]],["strong",["강한","센"]],["bright",["밝은","빛나는"]],["travel",["여행","여행하다"]],["listen",["듣다","경청하다"]],["winter",["겨울"]],["summer",["여름"]],["animal",["동물"]],["garden",["정원"]],["pencil",["연필"]]],
-  4:[["weather",["날씨"]],["holiday",["휴일","휴가"]],["kitchen",["부엌","주방"]],["picture",["그림","사진"]],["morning",["아침"]],["evening",["저녁"]],["brother",["형","오빠","남동생"]],["teacher",["선생님","교사"]],["student",["학생"]],["library",["도서관"]],["country",["나라","국가","시골"]],["promise",["약속","약속하다"]],["believe",["믿다"]],["explain",["설명하다"]],["between",["사이","~사이에"]],["history",["역사"]],["machine",["기계"]],["natural",["자연의","자연스러운"]]],
-  5:[["beautiful",["아름다운","예쁜"]],["dangerous",["위험한"]],["important",["중요한"]],["different",["다른","차이나는"]],["remember",["기억하다","기억나다"]],["forget",["잊다","잊어버리다"]],["decide",["결정하다","정하다"]],["imagine",["상상하다"]],["discover",["발견하다"]],["language",["언어","말"]],["question",["질문","문제"]],["mountain",["산"]],["medicine",["약","의학"]],["exercise",["운동","연습"]],["festival",["축제"]],["customer",["손님","고객"]],["increase",["증가","늘다","증가하다"]],["decrease",["감소","줄다"]]],
-  6:[["environment",["환경"]],["experience",["경험","경험하다"]],["technology",["기술","과학기술"]],["restaurant",["식당","레스토랑"]],["vegetable",["채소","야채"]],["dictionary",["사전"]],["furniture",["가구"]],["adventure",["모험"]],["knowledge",["지식"]],["celebrate",["축하하다","기념하다"]],["recommend",["추천하다"]],["introduce",["소개하다","도입하다"]],["dangerous",["위험한"]],["available",["이용가능한","구할수있는"]],["necessary",["필요한","필수의"]],["expensive",["비싼"]],["difficult",["어려운","힘든"]],["wonderful",["멋진","훌륭한"]]],
-  7:[["responsible",["책임있는","책임감있는"]],["opportunity",["기회"]],["information",["정보"]],["imagination",["상상","상상력"]],["communication",["의사소통","소통"]],["disappointed",["실망한"]],["comfortable",["편안한","편한"]],["confidence",["자신감","확신"]],["achievement",["성취","업적"]],["competition",["경쟁","대회"]],["temperature",["온도","기온"]],["independent",["독립적인","자립한"]],["traditional",["전통적인"]],["successful",["성공적인","성공한"]],["experiment",["실험"]],["government",["정부"]],["population",["인구"]],["generation",["세대"]]],
-  8:[["responsibility",["책임","책임감"]],["recommendation",["추천","권고"]],["consideration",["고려","숙고"]],["determination",["결심","투지"]],["concentration",["집중","농도"]],["pronunciation",["발음"]],["entertainment",["오락","연예"]],["accomplishment",["성취","업적"]],["sophisticated",["정교한","세련된"]],["extraordinary",["비범한","대단한"]],["enthusiastic",["열정적인","열광적인"]],["philosophy",["철학"]],["psychology",["심리학"]],["consequence",["결과","영향"]],["circumstance",["상황","환경"]],["perspective",["관점","시각"]],["significant",["중요한","상당한"]],["fundamental",["근본적인","기본적인"]]],
-  9:[["unprecedented",["전례없는","유례없는"]],["comprehensive",["포괄적인","종합적인"]],["controversial",["논란이많은","논쟁적인"]],["entrepreneur",["기업가","사업가"]],["bureaucracy",["관료제","관료주의"]],["infrastructure",["기반시설","인프라"]],["sustainability",["지속가능성"]],["accountability",["책임","책무"]],["vulnerability",["취약성","약점"]],["acknowledgment",["인정","승인"]],["inevitable",["불가피한","피할수없는"]],["ambiguous",["애매한","모호한"]],["meticulous",["꼼꼼한","세심한"]],["resilience",["회복력","탄력성"]],["prejudice",["편견","선입견"]],["hypothesis",["가설"]],["phenomenon",["현상"]],["legitimate",["합법적인","정당한"]]],
-  10:[["conscientious",["성실한","양심적인"]],["idiosyncratic",["독특한","특이한"]],["serendipity",["뜻밖의행운","우연한발견"]],["ephemeral",["순간적인","덧없는"]],["ubiquitous",["어디에나있는","편재하는"]],["quintessential",["전형적인","정수의"]],["juxtaposition",["병치","대조"]],["disenfranchised",["권리를빼앗긴","소외된"]],["incomprehensible",["이해할수없는"]],["surreptitious",["은밀한","몰래하는"]],["obsequious",["아첨하는","비굴한"]],["perfunctory",["형식적인","건성의"]],["magnanimous",["관대한","아량있는"]],["cacophony",["불협화음","소음"]],["esoteric",["난해한","비밀스러운"]],["pernicious",["해로운","치명적인"]],["recalcitrant",["반항적인","고집센"]],["ostentatious",["과시하는","허세부리는"]]]
-};
+const WORDS = window.WORDS;
 
 /* 레벨별 파라미터: 낙하속도(px/s), 생성간격(ms) */
 function levelParams(lv){
