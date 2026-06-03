@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0b1026">
+<title>영어 단어 낙하 타이핑 게임</title>
+<style>
+  :root{
+    --bg:#0b1026; --bg2:#111a3a; --accent:#4cc9f0; --accent2:#f72585;
+    --good:#39ff88; --warn:#ffd166; --danger:#ff4d6d; --brick:#ff6b35;
+    --text:#eef2ff; --muted:#9aa6d6;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;overflow:hidden;}
+  body{
+    font-family:"Segoe UI",-apple-system,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;
+    background:radial-gradient(circle at 50% -10%,#1b2a5e 0%,var(--bg) 55%);
+    color:var(--text); display:flex; flex-direction:column; height:100dvh;
+    user-select:none; touch-action:manipulation;
+  }
+
+  /* ===== HUD ===== */
+  #hud{
+    flex:0 0 auto; display:flex; align-items:center; gap:10px;
+    padding:8px 12px; background:rgba(0,0,0,.25); backdrop-filter:blur(6px);
+    border-bottom:1px solid rgba(255,255,255,.08); font-size:14px;
+  }
+  .stat{display:flex;flex-direction:column;line-height:1.1;min-width:48px;}
+  .stat b{font-size:18px;color:var(--accent);}
+  .stat span{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
+  #lifeBar{flex:1;height:14px;border-radius:8px;background:rgba(255,255,255,.1);overflow:hidden;border:1px solid rgba(255,255,255,.12);}
+  #lifeFill{height:100%;width:0%;background:linear-gradient(90deg,var(--good),var(--warn) 60%,var(--danger));transition:width .25s;}
+  #btnPause{margin-left:auto;background:rgba(255,255,255,.12);border:none;color:var(--text);
+    padding:6px 12px;border-radius:8px;font-size:14px;cursor:pointer;}
+
+  /* ===== PLAYFIELD ===== */
+  #field{position:relative;flex:1;overflow:hidden;}
+  #brickCol{
+    position:absolute;left:0;top:0;bottom:0;width:84px;
+    background:linear-gradient(180deg,rgba(255,107,53,.05),rgba(255,107,53,.12));
+    border-right:2px dashed rgba(255,107,53,.4);
+    display:flex;flex-direction:column-reverse;z-index:5;
+  }
+  .brick{
+    flex:1;margin:1px 3px;border-radius:5px;
+    background:linear-gradient(180deg,#ff8c42,#d64500);
+    border:1px solid rgba(0,0,0,.35);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.4), 0 2px 4px rgba(0,0,0,.4);
+    display:flex;align-items:center;justify-content:center;
+    font-weight:700;font-size:13px;color:#2a0d00;text-align:center;
+    overflow:hidden;animation:slam .3s ease;
+  }
+  @keyframes slam{0%{transform:translateX(-100%) scale(1.2);opacity:0;}100%{transform:none;opacity:1;}}
+  #brickLabel{
+    position:absolute;left:8px;top:6px;font-size:10px;color:var(--brick);
+    font-weight:700;letter-spacing:.5px;z-index:6;pointer-events:none;
+  }
+
+  .word{
+    position:absolute;z-index:3;padding:7px 14px;border-radius:12px;
+    font-weight:800;font-size:22px;white-space:nowrap;
+    background:linear-gradient(180deg,#2d3a72,#1b2350);
+    border:2px solid var(--accent);color:#fff;
+    box-shadow:0 4px 14px rgba(0,0,0,.45),0 0 0 1px rgba(76,201,240,.3);
+    will-change:transform;
+  }
+  .word.danger{border-color:var(--danger);box-shadow:0 0 16px rgba(255,77,109,.6);}
+  .word .hint{display:block;font-size:11px;color:var(--accent);font-weight:600;margin-top:2px;text-align:center;opacity:.85;}
+  .word.pop{animation:pop .35s ease forwards;}
+  @keyframes pop{0%{transform:scale(1);}40%{transform:scale(1.4);filter:brightness(2);}100%{transform:scale(0);opacity:0;}}
+
+  .particle{position:absolute;width:8px;height:8px;border-radius:50%;z-index:4;pointer-events:none;}
+
+  /* ===== INPUT BAR ===== */
+  #bar{
+    flex:0 0 auto;display:flex;gap:8px;padding:10px;
+    background:rgba(0,0,0,.35);border-top:1px solid rgba(255,255,255,.1);
+  }
+  #answer{
+    flex:1;font-size:20px;padding:12px 14px;border-radius:12px;border:2px solid var(--accent);
+    background:#0d1430;color:#fff;outline:none;text-align:center;font-weight:700;
+  }
+  #answer::placeholder{color:var(--muted);font-weight:400;}
+  #answer.shake{animation:shake .35s;border-color:var(--danger);}
+  @keyframes shake{0%,100%{transform:translateX(0);}20%{transform:translateX(-8px);}40%{transform:translateX(8px);}60%{transform:translateX(-5px);}80%{transform:translateX(5px);}}
+  #btnSend{background:var(--accent2);border:none;color:#fff;font-weight:800;font-size:16px;padding:0 18px;border-radius:12px;cursor:pointer;}
+
+  /* ===== OVERLAYS ===== */
+  .overlay{
+    position:absolute;inset:0;z-index:50;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center;
+    background:rgba(6,10,28,.92);backdrop-filter:blur(4px);overflow-y:auto;
+  }
+  .overlay.hidden{display:none;}
+  .title{font-size:clamp(26px,7vw,46px);font-weight:900;
+    background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .subtitle{color:var(--muted);font-size:15px;max-width:560px;line-height:1.5;}
+  .levels{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;width:100%;max-width:440px;}
+  .lvbtn{
+    aspect-ratio:1;border:none;border-radius:14px;cursor:pointer;font-weight:800;
+    color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background:linear-gradient(160deg,#243a7a,#16224d);border:2px solid rgba(255,255,255,.1);
+    transition:transform .12s;
+  }
+  .lvbtn:active{transform:scale(.93);}
+  .lvbtn b{font-size:24px;}
+  .lvbtn span{font-size:10px;color:var(--muted);margin-top:2px;}
+  .lvbtn[data-tier="1"]{border-color:#39ff88;}
+  .lvbtn[data-tier="2"]{border-color:#ffd166;}
+  .lvbtn[data-tier="3"]{border-color:#ff6b35;}
+  .lvbtn[data-tier="4"]{border-color:#ff4d6d;}
+  .bigbtn{background:linear-gradient(90deg,var(--accent),var(--accent2));border:none;color:#fff;
+    font-size:20px;font-weight:800;padding:14px 30px;border-radius:14px;cursor:pointer;}
+  .deadwords{
+    width:100%;max-width:480px;background:rgba(255,107,53,.1);border:1px solid rgba(255,107,53,.4);
+    border-radius:14px;padding:14px;max-height:46vh;overflow-y:auto;
+  }
+  .deadwords h3{margin:0 0 10px;color:var(--brick);font-size:15px;}
+  .drow{display:flex;justify-content:space-between;gap:10px;padding:6px 4px;border-bottom:1px solid rgba(255,255,255,.08);font-size:15px;}
+  .drow .en{font-weight:800;color:#fff;}
+  .drow .ko{color:var(--accent);text-align:right;}
+  .countdown{font-size:14px;color:var(--warn);}
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <div class="stat"><b id="hLevel">1</b><span>레벨</span></div>
+  <div class="stat"><b id="hScore">0</b><span>점수</span></div>
+  <div class="stat"><b id="hBrick">0</b><span>벽돌</span></div>
+  <div id="lifeBar"><div id="lifeFill"></div></div>
+  <button id="btnPause">⏸</button>
+</div>
+
+<div id="field">
+  <div id="brickLabel">벽돌 0 / 10</div>
+  <div id="brickCol"></div>
+</div>
+
+<div id="bar">
+  <input id="answer" type="text" inputmode="text" autocomplete="off" autocorrect="off"
+         autocapitalize="off" spellcheck="false" placeholder="뜻을 한글로 입력 후 Enter" enterkeyhint="send">
+  <button id="btnSend">전송</button>
+</div>
+
+<!-- 시작 / 레벨선택 -->
+<div class="overlay" id="startScreen">
+  <div class="title">⌨️ 영단어 낙하 게임</div>
+  <p class="subtitle">위에서 영어 단어가 떨어집니다. 아래 칸에 <b>한글 뜻</b>을 입력하고 Enter!<br>
+  맞히면 펑 터지고, 놓치면 왼쪽에 벽돌로 쌓여요. <b>벽돌 10개면 게임오버.</b><br>
+  뜻이 여러 개인 단어는 <b>아무 뜻이나</b> 맞히면 정답입니다.</p>
+  <div class="levels" id="levelGrid"></div>
+  <p class="subtitle" style="font-size:12px;">숫자가 클수록 단어가 어렵고 빨리 떨어집니다.</p>
+</div>
+
+<!-- 일시정지 -->
+<div class="overlay hidden" id="pauseScreen">
+  <div class="title">일시정지</div>
+  <button class="bigbtn" id="btnResume">계속하기 ▶</button>
+  <button class="bigbtn" id="btnQuit" style="background:rgba(255,255,255,.15);">레벨 선택으로</button>
+</div>
+
+<!-- 게임오버 -->
+<div class="overlay hidden" id="overScreen">
+  <div class="title" style="background:linear-gradient(90deg,var(--danger),var(--brick));-webkit-background-clip:text;background-clip:text;color:transparent;">GAME OVER</div>
+  <p class="subtitle">최종 점수 <b id="finalScore" style="color:var(--accent);font-size:22px;">0</b></p>
+  <div class="deadwords">
+    <h3>🧱 놓친 단어 10개의 뜻</h3>
+    <div id="deadList"></div>
+  </div>
+  <button class="bigbtn" id="btnAgain">다시 도전 🔁</button>
+</div>
+
+<script>
+/* ============================================================
+   단어 데이터 — 영단어 : 허용 정답(한글 뜻) 배열
+   뜻이 여러 개인 단어는 배열에 모두 넣어 어느 하나라도 맞으면 정답.
+   10단계 = 4난이도 티어로 묶어 점점 어려워짐.
+   ============================================================ */
+const WORDS = {
+  1:[["cat",["고양이"]],["dog",["개","강아지"]],["sun",["해","태양"]],["book",["책"]],["milk",["우유"]],["fish",["물고기","생선"]],["bird",["새"]],["tree",["나무"]],["star",["별"]],["rain",["비"]],["egg",["계란","달걀"]],["hand",["손"]],["foot",["발"]],["door",["문"]],["ball",["공"]],["king",["왕"]],["moon",["달"]],["bear",["곰"]]],
+  2:[["apple",["사과"]],["water",["물"]],["house",["집"]],["happy",["행복한","기쁜"]],["big",["큰","커다란"]],["small",["작은"]],["run",["달리다","뛰다"]],["eat",["먹다"]],["love",["사랑","사랑하다"]],["green",["초록","녹색"]],["white",["흰색","하얀"]],["black",["검정","까만"]],["fast",["빠른","빨리"]],["slow",["느린","천천히"]],["open",["열다","열린"]],["cold",["추운","차가운"]],["warm",["따뜻한"]],["sing",["노래하다"]]],
+  3:[["school",["학교"]],["friend",["친구"]],["family",["가족"]],["mother",["엄마","어머니"]],["father",["아빠","아버지"]],["window",["창문","창"]],["flower",["꽃"]],["orange",["오렌지","주황"]],["pretty",["예쁜","귀여운"]],["strong",["강한","센"]],["bright",["밝은","빛나는"]],["travel",["여행","여행하다"]],["listen",["듣다","경청하다"]],["winter",["겨울"]],["summer",["여름"]],["animal",["동물"]],["garden",["정원"]],["pencil",["연필"]]],
+  4:[["weather",["날씨"]],["holiday",["휴일","휴가"]],["kitchen",["부엌","주방"]],["picture",["그림","사진"]],["morning",["아침"]],["evening",["저녁"]],["brother",["형","오빠","남동생"]],["teacher",["선생님","교사"]],["student",["학생"]],["library",["도서관"]],["country",["나라","국가","시골"]],["promise",["약속","약속하다"]],["believe",["믿다"]],["explain",["설명하다"]],["between",["사이","~사이에"]],["history",["역사"]],["machine",["기계"]],["natural",["자연의","자연스러운"]]],
+  5:[["beautiful",["아름다운","예쁜"]],["dangerous",["위험한"]],["important",["중요한"]],["different",["다른","차이나는"]],["remember",["기억하다","기억나다"]],["forget",["잊다","잊어버리다"]],["decide",["결정하다","정하다"]],["imagine",["상상하다"]],["discover",["발견하다"]],["language",["언어","말"]],["question",["질문","문제"]],["mountain",["산"]],["medicine",["약","의학"]],["exercise",["운동","연습"]],["festival",["축제"]],["customer",["손님","고객"]],["increase",["증가","늘다","증가하다"]],["decrease",["감소","줄다"]]],
+  6:[["environment",["환경"]],["experience",["경험","경험하다"]],["technology",["기술","과학기술"]],["restaurant",["식당","레스토랑"]],["vegetable",["채소","야채"]],["dictionary",["사전"]],["furniture",["가구"]],["adventure",["모험"]],["knowledge",["지식"]],["celebrate",["축하하다","기념하다"]],["recommend",["추천하다"]],["introduce",["소개하다","도입하다"]],["dangerous",["위험한"]],["available",["이용가능한","구할수있는"]],["necessary",["필요한","필수의"]],["expensive",["비싼"]],["difficult",["어려운","힘든"]],["wonderful",["멋진","훌륭한"]]],
+  7:[["responsible",["책임있는","책임감있는"]],["opportunity",["기회"]],["information",["정보"]],["imagination",["상상","상상력"]],["communication",["의사소통","소통"]],["disappointed",["실망한"]],["comfortable",["편안한","편한"]],["confidence",["자신감","확신"]],["achievement",["성취","업적"]],["competition",["경쟁","대회"]],["temperature",["온도","기온"]],["independent",["독립적인","자립한"]],["traditional",["전통적인"]],["successful",["성공적인","성공한"]],["experiment",["실험"]],["government",["정부"]],["population",["인구"]],["generation",["세대"]]],
+  8:[["responsibility",["책임","책임감"]],["recommendation",["추천","권고"]],["consideration",["고려","숙고"]],["determination",["결심","투지"]],["concentration",["집중","농도"]],["pronunciation",["발음"]],["entertainment",["오락","연예"]],["accomplishment",["성취","업적"]],["sophisticated",["정교한","세련된"]],["extraordinary",["비범한","대단한"]],["enthusiastic",["열정적인","열광적인"]],["philosophy",["철학"]],["psychology",["심리학"]],["consequence",["결과","영향"]],["circumstance",["상황","환경"]],["perspective",["관점","시각"]],["significant",["중요한","상당한"]],["fundamental",["근본적인","기본적인"]]],
+  9:[["unprecedented",["전례없는","유례없는"]],["comprehensive",["포괄적인","종합적인"]],["controversial",["논란이많은","논쟁적인"]],["entrepreneur",["기업가","사업가"]],["bureaucracy",["관료제","관료주의"]],["infrastructure",["기반시설","인프라"]],["sustainability",["지속가능성"]],["accountability",["책임","책무"]],["vulnerability",["취약성","약점"]],["acknowledgment",["인정","승인"]],["inevitable",["불가피한","피할수없는"]],["ambiguous",["애매한","모호한"]],["meticulous",["꼼꼼한","세심한"]],["resilience",["회복력","탄력성"]],["prejudice",["편견","선입견"]],["hypothesis",["가설"]],["phenomenon",["현상"]],["legitimate",["합법적인","정당한"]]],
+  10:[["conscientious",["성실한","양심적인"]],["idiosyncratic",["독특한","특이한"]],["serendipity",["뜻밖의행운","우연한발견"]],["ephemeral",["순간적인","덧없는"]],["ubiquitous",["어디에나있는","편재하는"]],["quintessential",["전형적인","정수의"]],["juxtaposition",["병치","대조"]],["disenfranchised",["권리를빼앗긴","소외된"]],["incomprehensible",["이해할수없는"]],["surreptitious",["은밀한","몰래하는"]],["obsequious",["아첨하는","비굴한"]],["perfunctory",["형식적인","건성의"]],["magnanimous",["관대한","아량있는"]],["cacophony",["불협화음","소음"]],["esoteric",["난해한","비밀스러운"]],["pernicious",["해로운","치명적인"]],["recalcitrant",["반항적인","고집센"]],["ostentatious",["과시하는","허세부리는"]]]
+};
+
+/* 레벨별 파라미터: 낙하속도(px/s), 생성간격(ms) */
+function levelParams(lv){
+  return {
+    speed: 28 + lv*9,                 // 점점 빠르게
+    spawn: Math.max(950, 2600 - lv*170) // 점점 자주
+  };
+}
+const TIER = lv => lv<=2?1 : lv<=4?2 : lv<=7?3 : 4;
+const TIER_NAME = {1:"입문",2:"초급",3:"중급",4:"고급"};
+
+/* ============================================================
+   상태
+   ============================================================ */
+const field = document.getElementById('field');
+const brickCol = document.getElementById('brickCol');
+const brickLabel = document.getElementById('brickLabel');
+const input = document.getElementById('answer');
+let state = null; // {level, score, blocks, bricks, lastSpawn, raf, paused, running, pool}
+
+/* 한글 정규화: 공백/특수문자 제거 */
+function norm(s){ return (s||"").toLowerCase().replace(/[\s.,!?~·"'()]/g,"").trim(); }
+
+function buildLevelGrid(){
+  const grid = document.getElementById('levelGrid');
+  grid.innerHTML='';
+  for(let lv=1; lv<=10; lv++){
+    const b=document.createElement('button');
+    b.className='lvbtn'; b.dataset.tier=TIER(lv);
+    b.innerHTML=`<b>${lv}</b><span>${TIER_NAME[TIER(lv)]}</span>`;
+    b.onclick=()=>startGame(lv);
+    grid.appendChild(b);
+  }
+}
+
+function show(id){ document.getElementById(id).classList.remove('hidden'); }
+function hide(id){ document.getElementById(id).classList.add('hidden'); }
+
+function startGame(level){
+  hide('startScreen'); hide('overScreen'); hide('pauseScreen');
+  // 단어 풀: 해당 레벨 + 살짝 섞기 위해 인접 레벨 일부 포함
+  let pool = WORDS[level].slice();
+  state = {
+    level, score:0, blocks:[], bricks:[], deadWords:[],
+    lastSpawn:0, t0:performance.now(), prev:performance.now(),
+    paused:false, running:true, pool, usedIdx:0
+  };
+  // 풀 셔플
+  for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}
+  brickCol.innerHTML='';
+  updateHUD();
+  input.value=''; input.focus();
+  state.raf = requestAnimationFrame(loop);
+}
+
+function updateHUD(){
+  document.getElementById('hLevel').textContent=state.level;
+  document.getElementById('hScore').textContent=state.score;
+  document.getElementById('hBrick').textContent=state.bricks.length;
+  brickLabel.textContent=`벽돌 ${state.bricks.length} / 10`;
+  document.getElementById('lifeFill').style.width=(state.bricks.length/10*100)+'%';
+}
+
+/* 블록 생성 */
+function spawn(){
+  const [en,ko]=state.pool[state.usedIdx % state.pool.length];
+  state.usedIdx++;
+  const el=document.createElement('div');
+  el.className='word';
+  el.innerHTML=`${en}<span class="hint">${ko[0].length}글자 · ${ko.length>1?ko.length+'개 뜻':''}</span>`;
+  field.appendChild(el);
+  const fieldW=field.clientWidth, colW=brickCol.offsetWidth;
+  const w=el.offsetWidth;
+  const minX=colW+6, maxX=Math.max(minX+10, fieldW-w-10);
+  const x=minX+Math.random()*(maxX-minX);
+  el.style.left=x+'px'; el.style.top='-46px';
+  state.blocks.push({el,en,ko,y:-46,x});
+}
+
+/* 메인 루프 */
+function loop(now){
+  if(!state || !state.running) return;
+  if(state.paused){ state.raf=requestAnimationFrame(loop); state.prev=now; return; }
+  const dt=(now-state.prev)/1000; state.prev=now;
+  const {speed,spawn:spawnInt}=levelParams(state.level);
+
+  if(now-state.lastSpawn>spawnInt){ spawn(); state.lastSpawn=now; }
+
+  const floorY=field.clientHeight-20;
+  for(let i=state.blocks.length-1;i>=0;i--){
+    const b=state.blocks[i];
+    b.y+=speed*dt;
+    b.el.style.top=b.y+'px';
+    if(b.y>floorY*0.7) b.el.classList.add('danger'); else b.el.classList.remove('danger');
+    if(b.y>=floorY){
+      // 바닥 도달 → 벽돌로
+      b.el.remove();
+      state.blocks.splice(i,1);
+      addBrick(b);
+    }
+  }
+  updateHUD();
+  if(state.bricks.length>=10){ gameOver(); return; }
+  state.raf=requestAnimationFrame(loop);
+}
+
+function addBrick(b){
+  state.bricks.push(b);
+  state.deadWords.push({en:b.en,ko:b.ko});
+  const br=document.createElement('div');
+  br.className='brick'; br.textContent=b.en;
+  brickCol.appendChild(br);
+}
+
+/* 정답 제출 */
+function submit(){
+  if(!state||!state.running||state.paused) return;
+  const guess=norm(input.value);
+  if(!guess){ return; }
+  // 매칭되는 블록 중 가장 아래(위험한) 것
+  let target=-1, bestY=-Infinity;
+  for(let i=0;i<state.blocks.length;i++){
+    const b=state.blocks[i];
+    if(b.ko.some(k=>norm(k)===guess)){
+      if(b.y>bestY){bestY=b.y;target=i;}
+    }
+  }
+  if(target>=0){
+    const b=state.blocks[target];
+    popBlock(b);
+    state.blocks.splice(target,1);
+    const gain=10*state.level + Math.floor(b.y<0?0:b.y/20);
+    state.score+=Math.max(10,gain);
+    input.value='';
+    updateHUD();
+  } else {
+    // 오답
+    input.classList.add('shake');
+    setTimeout(()=>input.classList.remove('shake'),350);
+  }
+}
+
+function popBlock(b){
+  b.el.classList.add('pop');
+  const rect=b.el.getBoundingClientRect();
+  const fRect=field.getBoundingClientRect();
+  const cx=rect.left-fRect.left+rect.width/2;
+  const cy=rect.top-fRect.top+rect.height/2;
+  for(let i=0;i<10;i++){
+    const p=document.createElement('div');
+    p.className='particle';
+    const colors=['#4cc9f0','#f72585','#ffd166','#39ff88','#ff6b35'];
+    p.style.background=colors[i%colors.length];
+    p.style.left=cx+'px'; p.style.top=cy+'px';
+    field.appendChild(p);
+    const ang=Math.random()*Math.PI*2, dist=40+Math.random()*60;
+    const dx=Math.cos(ang)*dist, dy=Math.sin(ang)*dist;
+    p.animate([{transform:'translate(0,0)',opacity:1},
+               {transform:`translate(${dx}px,${dy}px)`,opacity:0}],
+              {duration:500,easing:'ease-out'}).onfinish=()=>p.remove();
+  }
+  setTimeout(()=>b.el.remove(),360);
+}
+
+function gameOver(){
+  state.running=false;
+  cancelAnimationFrame(state.raf);
+  document.getElementById('finalScore').textContent=state.score;
+  const list=document.getElementById('deadList');
+  list.innerHTML='';
+  state.deadWords.forEach(d=>{
+    const row=document.createElement('div');
+    row.className='drow';
+    row.innerHTML=`<span class="en">${d.en}</span><span class="ko">${d.ko.join(', ')}</span>`;
+    list.appendChild(row);
+  });
+  show('overScreen');
+}
+
+/* ============================================================
+   이벤트
+   ============================================================ */
+document.getElementById('btnSend').onclick=()=>{ submit(); input.focus(); };
+input.addEventListener('keydown',e=>{
+  if(e.key==='Enter'){ e.preventDefault(); submit(); }
+});
+
+document.getElementById('btnPause').onclick=()=>{
+  if(!state||!state.running) return;
+  state.paused=true; show('pauseScreen');
+};
+document.getElementById('btnResume').onclick=()=>{
+  if(!state) return;
+  state.paused=false; hide('pauseScreen'); state.prev=performance.now(); input.focus();
+};
+document.getElementById('btnQuit').onclick=()=>{
+  if(state){ state.running=false; cancelAnimationFrame(state.raf); }
+  // 블록 정리
+  field.querySelectorAll('.word,.particle').forEach(e=>e.remove());
+  hide('pauseScreen'); show('startScreen');
+};
+document.getElementById('btnAgain').onclick=()=>{
+  field.querySelectorAll('.word,.particle').forEach(e=>e.remove());
+  hide('overScreen'); show('startScreen');
+};
+
+// 모바일: 화면 탭하면 입력창 포커스 유지
+field.addEventListener('pointerdown',()=>{ if(state&&state.running&&!state.paused) input.focus(); });
+
+buildLevelGrid();
+</script>
+</body>
+</html>
