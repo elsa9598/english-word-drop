@@ -8,3 +8,6 @@ Thumbs.db
 .DS_Store
 .vscode/
 node_modules/
+# 개인 작업 메모 (공개 repo에 올리지 않음)
+작업메모.md
+*.local.md
