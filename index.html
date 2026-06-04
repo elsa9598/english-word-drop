@@ -157,6 +157,24 @@
   .drow .dex .exko{color:var(--muted);}
   .drow .dgram{font-size:11.5px;color:var(--warn);line-height:1.4;background:rgba(255,209,102,.08);padding:4px 8px;border-radius:6px;}
   .countdown{font-size:14px;color:var(--warn);}
+
+  /* 내장 사전 */
+  #dictScreen{justify-content:flex-start;padding-top:18px;gap:10px;}
+  #dictSearch{width:100%;max-width:500px;font-size:18px;padding:12px 14px;border-radius:12px;
+    border:2px solid var(--accent);background:#0d1430;color:#fff;outline:none;text-align:center;}
+  #dictSearch::placeholder{color:var(--muted);}
+  #dictResults{width:100%;max-width:500px;flex:1;overflow-y:auto;}
+  .dictrow{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;
+    padding:9px 12px;margin-bottom:7px;cursor:pointer;}
+  .dictrow .dtop{display:flex;justify-content:space-between;align-items:center;}
+  .dictrow .en{font-weight:800;font-size:16px;color:#fff;}
+  .dictrow .lv{font-size:11px;color:var(--muted);flex:0 0 auto;}
+  .dictrow .dko{color:var(--accent);font-size:14px;margin-top:2px;}
+  .dictrow .dex{margin-top:7px;font-size:12.5px;color:#cdd6f4;line-height:1.4;display:none;}
+  .dictrow .dgram{margin-top:4px;font-size:11.5px;color:var(--warn);background:rgba(255,209,102,.08);
+    padding:4px 8px;border-radius:6px;line-height:1.4;display:none;}
+  .dictrow.open .dex, .dictrow.open .dgram{display:block;}
+  .dicthint{color:var(--muted);font-size:13px;text-align:center;margin-top:14px;}
 </style>
 </head>
 <body>
@@ -189,10 +207,22 @@
   <p class="subtitle">위에서 영어 단어가 떨어집니다. 아래 칸에 <b>한글 뜻</b>을 입력하고 Enter!<br>
   맞히면 펑 터지고, 놓치면 왼쪽에 벽돌로 쌓여요. <b>벽돌 10개면 게임오버.</b><br>
   뜻이 여러 개인 단어는 <b>아무 뜻이나</b> 맞히면 정답입니다.</p>
-  <button class="bigbtn reviewBtn" onclick="startReview()" style="background:linear-gradient(90deg,#ff6b35,#f72585);display:none;">📕 틀린 단어 복습하기</button>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;width:100%;max-width:500px;">
+    <button class="bigbtn reviewBtn" onclick="startReview()" style="background:linear-gradient(90deg,#ff6b35,#f72585);display:none;flex:1;">📕 틀린 단어 복습</button>
+    <button class="bigbtn" onclick="openDict()" style="background:linear-gradient(90deg,#4cc9f0,#4361ee);flex:1;">📖 영어 사전</button>
+  </div>
   <p class="subtitle" style="font-size:13px;margin-bottom:-4px;">📚 <b>어휘 학습 로드맵</b> — 단계를 밟을수록 아는 단어가 쌓여요. 단계를 골라 시작!<br><span style="font-size:11px;">일반 게임에도 틀린 단어가 섞여 계속 복습됩니다.</span></p>
   <div class="levels" id="levelGrid"></div>
   <p class="subtitle" style="font-size:12px;">위 단계일수록 빈도 낮은(어려운) 단어가 더 빠르게 떨어집니다.<br>누적 단어수·이해율은 그 단계까지 익혔을 때 도달하는 학습 목표 가이드입니다.</p>
+</div>
+
+<!-- 내장 사전 -->
+<div class="overlay hidden" id="dictScreen">
+  <div class="title" style="font-size:clamp(22px,6vw,34px);">📖 영어 사전</div>
+  <input id="dictSearch" type="text" inputmode="text" autocomplete="off" autocorrect="off"
+         autocapitalize="off" spellcheck="false" placeholder="영어 단어 또는 한글 뜻 검색…">
+  <div id="dictResults"></div>
+  <button class="bigbtn" onclick="closeDict()" style="background:rgba(255,255,255,.15);">닫기</button>
 </div>
 
 <!-- 일시정지 -->
@@ -330,6 +360,47 @@ function updateStatsBar(){
 }
 
 function refreshStart(){ buildLevelGrid(); updateStatsBar(); updateReviewButtons(); }
+
+/* ============================================================
+   내장 사전 (오프라인) — words.js + examples.js 데이터로 검색
+   ============================================================ */
+const DICT = [];
+function buildDict(){
+  for(let lv=1; lv<=10; lv++){ (WORDS[lv]||[]).forEach(p=>DICT.push({en:p[0], ko:p[1], lv})); }
+}
+function openDict(){
+  hide('startScreen'); show('dictScreen');
+  const s=document.getElementById('dictSearch'); s.value=''; renderDict('');
+  setTimeout(()=>s.focus(), 100);
+}
+function closeDict(){
+  if('speechSynthesis' in window) speechSynthesis.cancel();
+  hide('dictScreen'); show('startScreen');
+}
+function renderDict(q){
+  const box=document.getElementById('dictResults');
+  q=(q||'').trim().toLowerCase();
+  if(!q){ box.innerHTML='<p class="dicthint">영어 단어나 한글 뜻을 입력해 보세요. (예: apple / 사과)</p>'; return; }
+  const isKo=/[가-힣]/.test(q);
+  const res=DICT.filter(d=> isKo ? d.ko.some(k=>k.replace(/\s/g,'').includes(q)) : d.en.toLowerCase().includes(q));
+  if(res.length===0){ box.innerHTML='<p class="dicthint">검색 결과가 없어요. 철자를 확인해 보세요.</p>'; return; }
+  const rank=d=> isKo ? (d.ko.some(k=>k===q)?0:1)
+                      : (d.en.toLowerCase()===q?0 : d.en.toLowerCase().startsWith(q)?1:2);
+  res.sort((a,b)=> rank(a)-rank(b) || a.en.length-b.en.length);
+  box.innerHTML='';
+  res.slice(0,60).forEach(d=>{
+    const ex=getExample(d.en, d.ko);
+    const row=document.createElement('div');
+    row.className='dictrow';
+    row.innerHTML=`<div class="dtop"><span class="en">🔊 ${d.en}</span><span class="lv">Lv ${d.lv}</span></div>`+
+      `<div class="dko">${d.ko.join(', ')}</div>`+
+      `<div class="dex">"${ex.sent}"<br>${ex.trans}</div>`+
+      `<div class="dgram">📘 ${ex.gram}</div>`;
+    row.onclick=()=>{ row.classList.toggle('open'); speakWord(d.en, true); };
+    box.appendChild(row);
+  });
+  if(res.length>60){ const m=document.createElement('p'); m.className='dicthint'; m.textContent='+'+(res.length-60)+'개 더 있어요. 검색어를 더 입력해 좁혀 보세요.'; box.appendChild(m); }
+}
 
 /* ============================================================
    발음 음성 출력 — Web Speech API (브라우저 내장, 오프라인, 무료)
@@ -699,6 +770,8 @@ fitViewport();
 
 // 초기화: 화면 구성 + 저장된 음소거 설정 적용
 refreshStart();
+buildDict();
+document.getElementById('dictSearch').addEventListener('input', e=>renderDict(e.target.value));
 if(SAVE.muted){ Sound.toggleMute(); document.getElementById('btnMute').textContent='🔇'; }
 </script>
 </body>
