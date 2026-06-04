@@ -227,7 +227,7 @@ const WORDS = window.WORDS;
 /* 레벨별 파라미터: 낙하속도(px/s), 생성간격(ms) */
 function levelParams(lv){
   return {
-    speed: (28 + lv*9) * 0.35,           // 낙하 속도 (50%에서 추가 30%↓ = 원래의 0.35배)
+    speed: (28 + lv*9) * 0.7,            // 낙하 속도 (한 단어씩 모드 → 0.35배에서 2배 = 0.7배)
     spawn: Math.max(1500, 3300 - lv*190) // 단어 출현 간격도 넓혀 타이핑 여유 확대
   };
 }
