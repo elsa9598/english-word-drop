@@ -108,20 +108,30 @@
   .title{font-size:clamp(26px,7vw,46px);font-weight:900;
     background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent;}
   .subtitle{color:var(--muted);font-size:15px;max-width:560px;line-height:1.5;}
-  .levels{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;width:100%;max-width:440px;}
+  .levels{display:flex;flex-direction:column;gap:8px;width:100%;max-width:500px;}
   .lvbtn{
-    aspect-ratio:1;border:none;border-radius:14px;cursor:pointer;font-weight:800;
-    color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    display:flex;align-items:center;gap:12px;width:100%;text-align:left;
+    padding:10px 12px;border-radius:14px;cursor:pointer;color:#fff;
     background:linear-gradient(160deg,#243a7a,#16224d);border:2px solid rgba(255,255,255,.1);
     transition:transform .12s;
   }
-  .lvbtn:active{transform:scale(.93);}
-  .lvbtn b{font-size:24px;}
-  .lvbtn span{font-size:10px;color:var(--muted);margin-top:2px;}
+  .lvbtn:active{transform:scale(.97);}
+  .lvnum{flex:0 0 auto;width:38px;height:38px;border-radius:10px;display:flex;align-items:center;
+    justify-content:center;font-size:19px;font-weight:900;background:rgba(255,255,255,.12);}
+  .lvmid{flex:1;display:flex;flex-direction:column;line-height:1.25;min-width:0;}
+  .lvmid b{font-size:15px;}
+  .lvmid small{font-size:10px;color:var(--muted);}
+  .lvright{flex:0 0 auto;text-align:right;line-height:1.3;}
+  .lvright .w{font-size:13px;font-weight:800;color:var(--accent);}
+  .lvright .c{font-size:10px;color:var(--muted);}
   .lvbtn[data-tier="1"]{border-color:#39ff88;}
+  .lvbtn[data-tier="1"] .lvnum{background:rgba(57,255,136,.2);}
   .lvbtn[data-tier="2"]{border-color:#ffd166;}
+  .lvbtn[data-tier="2"] .lvnum{background:rgba(255,209,102,.2);}
   .lvbtn[data-tier="3"]{border-color:#ff6b35;}
+  .lvbtn[data-tier="3"] .lvnum{background:rgba(255,107,53,.2);}
   .lvbtn[data-tier="4"]{border-color:#ff4d6d;}
+  .lvbtn[data-tier="4"] .lvnum{background:rgba(255,77,109,.2);}
   .bigbtn{background:linear-gradient(90deg,var(--accent),var(--accent2));border:none;color:#fff;
     font-size:20px;font-weight:800;padding:14px 30px;border-radius:14px;cursor:pointer;}
   .deadwords{
@@ -163,8 +173,9 @@
   <p class="subtitle">위에서 영어 단어가 떨어집니다. 아래 칸에 <b>한글 뜻</b>을 입력하고 Enter!<br>
   맞히면 펑 터지고, 놓치면 왼쪽에 벽돌로 쌓여요. <b>벽돌 10개면 게임오버.</b><br>
   뜻이 여러 개인 단어는 <b>아무 뜻이나</b> 맞히면 정답입니다.</p>
+  <p class="subtitle" style="font-size:13px;margin-bottom:-4px;">📚 <b>어휘 학습 로드맵</b> — 단계를 밟을수록 아는 단어가 쌓여요. 단계를 골라 시작!</p>
   <div class="levels" id="levelGrid"></div>
-  <p class="subtitle" style="font-size:12px;">숫자가 클수록 단어가 어렵고 빨리 떨어집니다.</p>
+  <p class="subtitle" style="font-size:12px;">위 단계일수록 빈도 낮은(어려운) 단어가 더 빠르게 떨어집니다.<br>누적 단어수·이해율은 그 단계까지 익혔을 때 도달하는 학습 목표 가이드입니다.</p>
 </div>
 
 <!-- 일시정지 -->
@@ -178,6 +189,7 @@
 <div class="overlay hidden" id="overScreen">
   <div class="title" style="background:linear-gradient(90deg,var(--danger),var(--brick));-webkit-background-clip:text;background-clip:text;color:transparent;">GAME OVER</div>
   <p class="subtitle">최종 점수 <b id="finalScore" style="color:var(--accent);font-size:22px;">0</b></p>
+  <p class="subtitle" id="reachInfo" style="font-size:14px;color:var(--warn);margin-top:-6px;"></p>
   <div class="deadwords">
     <h3>🧱 놓친 단어 10개의 뜻</h3>
     <div id="deadList"></div>
@@ -202,6 +214,20 @@ function levelParams(lv){
 }
 const TIER = lv => lv<=2?1 : lv<=4?2 : lv<=7?3 : 4;
 const TIER_NAME = {1:"입문",2:"초급",3:"중급",4:"고급"};
+
+/* 어휘 학습 로드맵 — 한 단계 = 누적 500단어. 빈도순(고빈도→저빈도) 근사 배치. */
+const LEVEL_INFO = {
+  1 :{cum:500 , name:"여행·생존 회화 입문", cover:"~80%"},
+  2 :{cum:1000, name:"여행·생존 회화",     cover:"85%"},
+  3 :{cum:1500, name:"기본 의사소통",       cover:"88%"},
+  4 :{cum:2000, name:"기본 의사소통 완성",   cover:"90%"},
+  5 :{cum:2500, name:"일상 유창 진입",       cover:"93%"},
+  6 :{cum:3000, name:"일상 유창 ⭐",         cover:"95%"},
+  7 :{cum:3500, name:"중급 독해",           cover:"96%"},
+  8 :{cum:4000, name:"편하게 읽고 듣기",     cover:"97%"},
+  9 :{cum:4500, name:"고급 어휘",           cover:"97.5%"},
+  10:{cum:5000, name:"구어 98% 완성",       cover:"98%"}
+};
 
 /* ============================================================
    사운드 — Web Audio API로 효과음 합성 (외부 파일 0개, 오프라인)
@@ -257,9 +283,12 @@ function buildLevelGrid(){
   const grid = document.getElementById('levelGrid');
   grid.innerHTML='';
   for(let lv=1; lv<=10; lv++){
+    const info=LEVEL_INFO[lv];
     const b=document.createElement('button');
     b.className='lvbtn'; b.dataset.tier=TIER(lv);
-    b.innerHTML=`<b>${lv}</b><span>${TIER_NAME[TIER(lv)]}</span>`;
+    b.innerHTML=`<span class="lvnum">${lv}</span>`+
+      `<span class="lvmid"><b>${info.name}</b><small>${TIER_NAME[TIER(lv)]} 난이도 · 낙하속도 ${lv}단계</small></span>`+
+      `<span class="lvright"><span class="w">~${info.cum.toLocaleString()}단어</span><br><span class="c">대화 ${info.cover} 이해</span></span>`;
     b.onclick=()=>startGame(lv);
     grid.appendChild(b);
   }
@@ -403,6 +432,9 @@ function gameOver(){
   cancelAnimationFrame(state.raf);
   Sound.over();
   document.getElementById('finalScore').textContent=state.score;
+  const info=LEVEL_INFO[state.level];
+  document.getElementById('reachInfo').innerHTML=
+    `🎯 이 단계 = <b>상위 ~${info.cum.toLocaleString()}단어</b> · <b>${info.name}</b> (대화 ${info.cover} 이해)`;
   const list=document.getElementById('deadList');
   list.innerHTML='';
   state.deadWords.forEach(d=>{
