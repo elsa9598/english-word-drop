@@ -139,9 +139,13 @@
     border-radius:14px;padding:14px;max-height:46vh;overflow-y:auto;
   }
   .deadwords h3{margin:0 0 10px;color:var(--brick);font-size:15px;}
-  .drow{display:flex;justify-content:space-between;gap:10px;padding:6px 4px;border-bottom:1px solid rgba(255,255,255,.08);font-size:15px;}
+  .drow{display:flex;flex-direction:column;gap:4px;padding:9px 4px;border-bottom:1px solid rgba(255,255,255,.08);}
+  .drow .dtop{display:flex;justify-content:space-between;gap:10px;font-size:15px;cursor:pointer;}
   .drow .en{font-weight:800;color:#fff;}
   .drow .ko{color:var(--accent);text-align:right;}
+  .drow .dex{font-size:12.5px;color:#cdd6f4;line-height:1.4;cursor:pointer;}
+  .drow .dex .exko{color:var(--muted);}
+  .drow .dgram{font-size:11.5px;color:var(--warn);line-height:1.4;background:rgba(255,209,102,.08);padding:4px 8px;border-radius:6px;}
   .countdown{font-size:14px;color:var(--warn);}
 </style>
 </head>
@@ -170,10 +174,13 @@
 <!-- 시작 / 레벨선택 -->
 <div class="overlay" id="startScreen">
   <div class="title">⌨️ 영단어 낙하 게임</div>
+  <p class="subtitle" id="statsBar" style="font-size:13px;color:var(--accent);margin:2px 0;"></p>
+  <button onclick="resetStats()" style="background:none;border:1px solid rgba(255,255,255,.2);color:var(--muted);font-size:11px;padding:3px 10px;border-radius:8px;cursor:pointer;margin-top:-6px;">기록 초기화</button>
   <p class="subtitle">위에서 영어 단어가 떨어집니다. 아래 칸에 <b>한글 뜻</b>을 입력하고 Enter!<br>
   맞히면 펑 터지고, 놓치면 왼쪽에 벽돌로 쌓여요. <b>벽돌 10개면 게임오버.</b><br>
   뜻이 여러 개인 단어는 <b>아무 뜻이나</b> 맞히면 정답입니다.</p>
-  <p class="subtitle" style="font-size:13px;margin-bottom:-4px;">📚 <b>어휘 학습 로드맵</b> — 단계를 밟을수록 아는 단어가 쌓여요. 단계를 골라 시작!</p>
+  <button class="bigbtn reviewBtn" onclick="startReview()" style="background:linear-gradient(90deg,#ff6b35,#f72585);display:none;">📕 틀린 단어 복습하기</button>
+  <p class="subtitle" style="font-size:13px;margin-bottom:-4px;">📚 <b>어휘 학습 로드맵</b> — 단계를 밟을수록 아는 단어가 쌓여요. 단계를 골라 시작!<br><span style="font-size:11px;">일반 게임에도 틀린 단어가 섞여 계속 복습됩니다.</span></p>
   <div class="levels" id="levelGrid"></div>
   <p class="subtitle" style="font-size:12px;">위 단계일수록 빈도 낮은(어려운) 단어가 더 빠르게 떨어집니다.<br>누적 단어수·이해율은 그 단계까지 익혔을 때 도달하는 학습 목표 가이드입니다.</p>
 </div>
@@ -191,13 +198,15 @@
   <p class="subtitle">최종 점수 <b id="finalScore" style="color:var(--accent);font-size:22px;">0</b></p>
   <p class="subtitle" id="reachInfo" style="font-size:14px;color:var(--warn);margin-top:-6px;"></p>
   <div class="deadwords">
-    <h3>🧱 놓친 단어 10개의 뜻</h3>
+    <h3>📕 오답노트 — 단어를 누르면 발음 🔊</h3>
     <div id="deadList"></div>
   </div>
+  <button class="bigbtn reviewBtn" onclick="startReview()" style="background:linear-gradient(90deg,#ff6b35,#f72585);">📕 틀린 단어 복습하기</button>
   <button class="bigbtn" id="btnAgain">다시 도전 🔁</button>
 </div>
 
 <script src="words.js"></script>
+<script src="examples.js"></script>
 <script>
 /* ============================================================
    단어 데이터는 words.js 의 window.WORDS 에서 로드 (레벨별 50개)
@@ -268,6 +277,87 @@ const Sound = (()=>{
 })();
 
 /* ============================================================
+   로컬 저장 — localStorage (외부 통신 없음, 100% 오프라인)
+   bests: 레벨별 최고점수 / totalPopped: 누적 격파(익힌) 단어 수
+   maxLevel: 최고 도달 단계 / plays: 플레이 횟수 / muted: 음소거
+   ============================================================ */
+const SAVE_KEY='ewd_save_v1';
+function loadSave(){ try{ return JSON.parse(localStorage.getItem(SAVE_KEY))||{}; }catch(e){ return {}; } }
+function persist(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(SAVE)); }catch(e){} }
+const SAVE = loadSave();
+SAVE.bests = SAVE.bests || {};
+SAVE.totalPopped = SAVE.totalPopped || 0;
+SAVE.plays = SAVE.plays || 0;
+SAVE.maxLevel = SAVE.maxLevel || 0;
+SAVE.muted = !!SAVE.muted;
+SAVE.missed = SAVE.missed || {};   // 오답노트: { 영단어: [한글뜻,...] }
+
+/* 한 판 결과를 저장에 반영 (게임오버=finished true, 중도 종료=false) */
+function commitRun(finished){
+  if(!state || state.committed) return;
+  state.committed = true;
+  SAVE.plays += 1;
+  SAVE.totalPopped += state.popped;
+  if(!state.review){  // 복습 모드는 점수·단계 기록에 반영하지 않음
+    SAVE.maxLevel = Math.max(SAVE.maxLevel, state.level);
+    const prevBest = SAVE.bests[state.level] || 0;
+    if(state.score > prevBest){ SAVE.bests[state.level] = state.score; if(finished) state.newRecord = true; }
+  }
+  persist();
+}
+
+function resetStats(){
+  if(!confirm('저장된 기록(최고점수·익힌 단어·통계)을 모두 지울까요?')) return;
+  const muted = SAVE.muted;
+  localStorage.removeItem(SAVE_KEY);
+  SAVE.bests={}; SAVE.totalPopped=0; SAVE.plays=0; SAVE.maxLevel=0; SAVE.muted=muted;
+  persist(); refreshStart();
+}
+
+function updateStatsBar(){
+  document.getElementById('statsBar').innerHTML =
+    `🏆 익힌 단어 <b>${SAVE.totalPopped.toLocaleString()}</b>개 · 최고 단계 <b>Lv ${SAVE.maxLevel||'-'}</b> · 플레이 <b>${SAVE.plays}</b>회`;
+}
+
+function refreshStart(){ buildLevelGrid(); updateStatsBar(); updateReviewButtons(); }
+
+/* ============================================================
+   발음 음성 출력 — Web Speech API (브라우저 내장, 오프라인, 무료)
+   단어가 떨어질 때 영어 발음을 읽어줌. 음소거(SAVE.muted)와 연동.
+   ============================================================ */
+let ttsVoice = null;
+function pickVoice(){
+  if(!('speechSynthesis' in window)) return;
+  const vs = speechSynthesis.getVoices();
+  ttsVoice = vs.find(v=>/en[-_]US/i.test(v.lang)) || vs.find(v=>/^en/i.test(v.lang)) || null;
+}
+if('speechSynthesis' in window){
+  pickVoice();
+  speechSynthesis.onvoiceschanged = pickVoice;
+}
+/* 단어의 예문·번역·문법 설명. 데이터에 없으면 학습용 폴백을 생성. */
+function getExample(en, ko){
+  const ex = (window.EXAMPLES && window.EXAMPLES[en]);
+  if(ex) return {sent:ex[0], trans:ex[1], gram:ex[2]};
+  return {
+    sent:`I learned the word "${en}" today.`,
+    trans:`나는 오늘 "${en}"(${ko[0]})(이)라는 단어를 배웠다.`,
+    gram:`과거시제예요(learn→learned). 이 문장 틀에 단어를 넣어 직접 말해 보며 익혀요.`
+  };
+}
+
+function speakWord(text, force){
+  if((!force && SAVE.muted) || !('speechSynthesis' in window)) return;
+  try{
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang='en-US'; if(ttsVoice) u.voice=ttsVoice;
+    u.rate=0.9; u.pitch=1; u.volume=1;
+    speechSynthesis.cancel();      // 이전 발음 끊고 새 단어 읽기
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+/* ============================================================
    상태
    ============================================================ */
 const field = document.getElementById('field');
@@ -284,10 +374,11 @@ function buildLevelGrid(){
   grid.innerHTML='';
   for(let lv=1; lv<=10; lv++){
     const info=LEVEL_INFO[lv];
+    const best=SAVE.bests[lv];
     const b=document.createElement('button');
     b.className='lvbtn'; b.dataset.tier=TIER(lv);
     b.innerHTML=`<span class="lvnum">${lv}</span>`+
-      `<span class="lvmid"><b>${info.name}</b><small>${TIER_NAME[TIER(lv)]} 난이도 · 낙하속도 ${lv}단계</small></span>`+
+      `<span class="lvmid"><b>${info.name}</b><small>${TIER_NAME[TIER(lv)]} 난이도 · 낙하속도 ${lv}단계${best?` · 🏆 최고 ${best}`:''}</small></span>`+
       `<span class="lvright"><span class="w">~${info.cum.toLocaleString()}단어</span><br><span class="c">대화 ${info.cover} 이해</span></span>`;
     b.onclick=()=>startGame(lv);
     grid.appendChild(b);
@@ -297,14 +388,22 @@ function buildLevelGrid(){
 function show(id){ document.getElementById(id).classList.remove('hidden'); }
 function hide(id){ document.getElementById(id).classList.add('hidden'); }
 
-function startGame(level){
+function startGame(level, review){
   hide('startScreen'); hide('overScreen'); hide('pauseScreen');
-  // 단어 풀: 해당 레벨 + 살짝 섞기 위해 인접 레벨 일부 포함
-  let pool = WORDS[level].slice();
+  // 오답노트(틀린 단어)
+  const missedArr = Object.keys(SAVE.missed).map(en=>[en, SAVE.missed[en]]);
+  let pool;
+  if(review){
+    if(missedArr.length===0){ alert('복습할 틀린 단어가 없어요! 게임을 플레이해 보세요.'); show('startScreen'); return; }
+    pool = missedArr.slice();              // 복습 모드: 틀린 단어만
+  } else {
+    pool = WORDS[level].slice();           // 일반 모드: 레벨 단어 (틀린 단어는 spawn에서 확률 출제)
+  }
   state = {
-    level, score:0, blocks:[], bricks:[], deadWords:[],
+    level, review:!!review, score:0, blocks:[], bricks:[], deadWords:[],
     lastSpawn:0, t0:performance.now(), prev:performance.now(),
-    paused:false, running:true, pool, usedIdx:0
+    paused:false, running:true, pool, usedIdx:0,
+    popped:0, committed:false, newRecord:false, relearned:0
   };
   // 풀 셔플
   for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}
@@ -316,7 +415,7 @@ function startGame(level){
 }
 
 function updateHUD(){
-  document.getElementById('hLevel').textContent=state.level;
+  document.getElementById('hLevel').textContent = state.review ? '복습' : state.level;
   document.getElementById('hScore').textContent=state.score;
   document.getElementById('hBrick').textContent=state.bricks.length;
   brickLabel.textContent=`벽돌 ${state.bricks.length} / 10`;
@@ -325,8 +424,17 @@ function updateHUD(){
 
 /* 블록 생성 */
 function spawn(){
-  const [en,ko]=state.pool[state.usedIdx % state.pool.length];
-  state.usedIdx++;
+  let en, ko;
+  const missedKeys = Object.keys(SAVE.missed);
+  // 일반 모드: 30% 확률로 오답노트(틀린) 단어를 우선 출제 → 통과할 때까지 계속 등장
+  if(!state.review && missedKeys.length>0 && Math.random()<0.3){
+    en = missedKeys[Math.floor(Math.random()*missedKeys.length)];
+    ko = SAVE.missed[en];
+  } else {
+    const pair = state.pool[state.usedIdx % state.pool.length];
+    en = pair[0]; ko = pair[1];
+    state.usedIdx++;
+  }
   const el=document.createElement('div');
   el.className='word';
   el.innerHTML=`${en}<span class="hint">${ko[0].length}글자 · ${ko.length>1?ko.length+'개 뜻':''}</span>`;
@@ -337,6 +445,7 @@ function spawn(){
   const x=minX+Math.random()*(maxX-minX);
   el.style.left=x+'px'; el.style.top='-46px';
   state.blocks.push({el,en,ko,y:-46,x});
+  speakWord(en);   // 발음 음성 출력
 }
 
 /* 메인 루프 */
@@ -370,6 +479,7 @@ function addBrick(b){
   Sound.brick();
   state.bricks.push(b);
   state.deadWords.push({en:b.en,ko:b.ko});
+  SAVE.missed[b.en]=b.ko;   // 오답노트에 기록 (commitRun에서 저장)
   const br=document.createElement('div');
   br.className='brick'; br.textContent=b.en;
   brickCol.appendChild(br);
@@ -394,6 +504,8 @@ function submit(){
     state.blocks.splice(target,1);
     const gain=10*state.level + Math.floor(b.y<0?0:b.y/20);
     state.score+=Math.max(10,gain);
+    state.popped++;
+    if(SAVE.missed[b.en]){ delete SAVE.missed[b.en]; state.relearned=(state.relearned||0)+1; } // 오답노트 졸업
     input.value='';
     updateHUD();
   } else {
@@ -431,19 +543,42 @@ function gameOver(){
   state.running=false;
   cancelAnimationFrame(state.raf);
   Sound.over();
+  commitRun(true);                 // 점수·통계·오답노트 저장
   document.getElementById('finalScore').textContent=state.score;
-  const info=LEVEL_INFO[state.level];
-  document.getElementById('reachInfo').innerHTML=
-    `🎯 이 단계 = <b>상위 ~${info.cum.toLocaleString()}단어</b> · <b>${info.name}</b> (대화 ${info.cover} 이해)`;
+  let txt;
+  if(state.review){
+    txt=`📕 복습 모드 — 틀린 단어 <b>${state.relearned}개</b>를 다시 익혔어요!`;
+  } else {
+    const info=LEVEL_INFO[state.level];
+    txt=`🎯 이 단계 = <b>상위 ~${info.cum.toLocaleString()}단어</b> · <b>${info.name}</b> (대화 ${info.cover} 이해)`;
+  }
+  if(state.newRecord) txt='🎉 <b>신기록!</b><br>'+txt;
+  document.getElementById('reachInfo').innerHTML=txt;
   const list=document.getElementById('deadList');
   list.innerHTML='';
   state.deadWords.forEach(d=>{
+    const ex=getExample(d.en, d.ko);
     const row=document.createElement('div');
     row.className='drow';
-    row.innerHTML=`<span class="en">${d.en}</span><span class="ko">${d.ko.join(', ')}</span>`;
+    row.innerHTML=
+      `<div class="dtop" title="클릭하면 단어 발음"><span class="en">🔊 ${d.en}</span><span class="ko">${d.ko.join(', ')}</span></div>`+
+      `<div class="dex" title="클릭하면 예문 발음">"${ex.sent}"<br><span class="exko">${ex.trans}</span></div>`+
+      `<div class="dgram">📘 ${ex.gram}</div>`;
+    row.querySelector('.dtop').onclick=()=>speakWord(d.en, true);
+    row.querySelector('.dex').onclick=()=>speakWord(ex.sent, true);
     list.appendChild(row);
   });
+  updateReviewButtons();
   show('overScreen');
+}
+
+/* 시작·게임오버 화면의 복습 버튼 텍스트/표시 갱신 */
+function updateReviewButtons(){
+  const n = Object.keys(SAVE.missed).length;
+  document.querySelectorAll('.reviewBtn').forEach(btn=>{
+    btn.style.display = n>0 ? '' : 'none';
+    btn.innerHTML = `📕 틀린 단어 ${n}개 복습하기`;
+  });
 }
 
 /* ============================================================
@@ -454,9 +589,12 @@ input.addEventListener('keydown',e=>{
   if(e.key==='Enter'){ e.preventDefault(); submit(); }
 });
 
+function startReview(){ startGame(3, true); }   // 복습 모드: 틀린 단어만, 중간 속도
+
 document.getElementById('btnMute').onclick=(e)=>{
   const m=Sound.toggleMute();
   e.currentTarget.textContent=m?'🔇':'🔊';
+  SAVE.muted=m; persist();
   Sound.resume(); if(!m) Sound.level();
 };
 document.getElementById('btnPause').onclick=()=>{
@@ -468,20 +606,23 @@ document.getElementById('btnResume').onclick=()=>{
   state.paused=false; hide('pauseScreen'); state.prev=performance.now(); input.focus();
 };
 document.getElementById('btnQuit').onclick=()=>{
-  if(state){ state.running=false; cancelAnimationFrame(state.raf); }
+  if(state){ state.running=false; cancelAnimationFrame(state.raf); commitRun(false); }
   // 블록 정리
   field.querySelectorAll('.word,.particle').forEach(e=>e.remove());
-  hide('pauseScreen'); show('startScreen');
+  if('speechSynthesis' in window) speechSynthesis.cancel();
+  hide('pauseScreen'); refreshStart(); show('startScreen');
 };
 document.getElementById('btnAgain').onclick=()=>{
   field.querySelectorAll('.word,.particle').forEach(e=>e.remove());
-  hide('overScreen'); show('startScreen');
+  hide('overScreen'); refreshStart(); show('startScreen');
 };
 
 // 모바일: 화면 탭하면 입력창 포커스 유지
 field.addEventListener('pointerdown',()=>{ if(state&&state.running&&!state.paused) input.focus(); });
 
-buildLevelGrid();
+// 초기화: 화면 구성 + 저장된 음소거 설정 적용
+refreshStart();
+if(SAVE.muted){ Sound.toggleMute(); document.getElementById('btnMute').textContent='🔇'; }
 </script>
 </body>
 </html>
