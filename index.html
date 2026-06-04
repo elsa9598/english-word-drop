@@ -455,7 +455,8 @@ function startGame(level, review){
     level, review:!!review, score:0, blocks:[], bricks:[], deadWords:[],
     lastSpawn:0, nextSpawnAt:0, t0:performance.now(), prev:performance.now(),
     paused:false, running:true, pool, usedIdx:0,
-    popped:0, committed:false, newRecord:false, relearned:0
+    popped:0, committed:false, newRecord:false, relearned:0,
+    brickWords:new Set()   // 이번 판에 이미 벽돌이 된 단어 → 다시 안 내려옴
   };
   // 풀 셔플
   for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}
@@ -477,15 +478,21 @@ function updateHUD(){
 /* 블록 생성 */
 function spawn(){
   let en, ko;
-  const missedKeys = Object.keys(SAVE.missed);
-  // 일반 모드: 30% 확률로 오답노트(틀린) 단어를 우선 출제 → 통과할 때까지 계속 등장
+  // 오답노트 단어 30% 우선 출제 — 단 이번 판에 이미 벽돌이 된 단어는 제외
+  const missedKeys = state.review ? [] : Object.keys(SAVE.missed).filter(k=>!state.brickWords.has(k));
   if(!state.review && missedKeys.length>0 && Math.random()<0.3){
     en = missedKeys[Math.floor(Math.random()*missedKeys.length)];
     ko = SAVE.missed[en];
   } else {
-    const pair = state.pool[state.usedIdx % state.pool.length];
-    en = pair[0]; ko = pair[1];
+    // 레벨 풀에서 선택하되, 이번 판에 벽돌이 된 단어는 건너뜀
+    let pair = state.pool[state.usedIdx % state.pool.length];
     state.usedIdx++;
+    let tries = 1;
+    while(!state.review && state.brickWords.has(pair[0]) && tries < state.pool.length){
+      pair = state.pool[state.usedIdx % state.pool.length];
+      state.usedIdx++; tries++;
+    }
+    en = pair[0]; ko = pair[1];
   }
   const el=document.createElement('div');
   el.className='word';
@@ -533,7 +540,8 @@ function addBrick(b){
   Sound.brick();
   state.bricks.push(b);
   state.deadWords.push({en:b.en,ko:b.ko});
-  SAVE.missed[b.en]=b.ko;   // 오답노트에 기록 (commitRun에서 저장)
+  state.brickWords.add(b.en);   // 이번 판에서 다시 안 나오게
+  SAVE.missed[b.en]=b.ko;       // 오답노트에 기록 (commitRun에서 저장)
   const br=document.createElement('div');
   br.className='brick'; br.textContent=b.en;
   brickCol.appendChild(br);
