@@ -84,6 +84,16 @@
 
   .particle{position:absolute;width:8px;height:8px;border-radius:50%;z-index:4;pointer-events:none;}
 
+  /* 키보드가 떠서 화면이 낮아지면(모바일) 컴팩트하게 — 단어가 더 많이 보이도록 */
+  @media (max-height:560px){
+    #hud{padding:5px 10px;font-size:13px;}
+    .stat b{font-size:16px;}
+    .word{font-size:18px;padding:5px 11px;}
+    .word .hint{font-size:10px;}
+    #bar{padding:6px;}
+    #answer{font-size:17px;padding:9px 12px;}
+  }
+
   /* ===== INPUT BAR ===== */
   #bar{
     flex:0 0 auto;display:flex;gap:8px;padding:10px;
@@ -661,6 +671,20 @@ document.getElementById('btnAgain').onclick=()=>{
 
 // 모바일: 화면 탭하면 입력창 포커스 유지
 field.addEventListener('pointerdown',()=>{ if(state&&state.running&&!state.paused) input.focus(); });
+
+// 모바일: 가상 키보드가 단어를 가리지 않게, 보이는 높이(visualViewport)에 게임을 맞춤
+function fitViewport(){
+  const vv = window.visualViewport;
+  const h = vv ? vv.height : window.innerHeight;
+  document.body.style.height = h + 'px';
+}
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize', fitViewport);
+  window.visualViewport.addEventListener('scroll', fitViewport);
+}
+window.addEventListener('resize', fitViewport);
+window.addEventListener('orientationchange', ()=>setTimeout(fitViewport,300));
+fitViewport();
 
 // 초기화: 화면 구성 + 저장된 음소거 설정 적용
 refreshStart();
