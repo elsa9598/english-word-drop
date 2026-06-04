@@ -548,7 +548,6 @@ function submit(){
     state.score+=Math.max(10,gain);
     state.popped++;
     if(SAVE.missed[b.en]){ delete SAVE.missed[b.en]; state.relearned=(state.relearned||0)+1; } // 오답노트 졸업
-    input.value='';
     updateHUD();
   } else {
     // 오답
@@ -556,6 +555,7 @@ function submit(){
     input.classList.add('shake');
     setTimeout(()=>input.classList.remove('shake'),350);
   }
+  input.value='';   // 엔터 후 정답·오답 상관없이 입력창 리셋 (백스페이스 불필요)
 }
 
 function popBlock(b){
