@@ -217,7 +217,7 @@ const WORDS = window.WORDS;
 /* 레벨별 파라미터: 낙하속도(px/s), 생성간격(ms) */
 function levelParams(lv){
   return {
-    speed: 28 + lv*9,                 // 점점 빠르게
+    speed: (28 + lv*9) * 0.5,         // 낙하 속도 (기존의 50%로 완화)
     spawn: Math.max(950, 2600 - lv*170) // 점점 자주
   };
 }
