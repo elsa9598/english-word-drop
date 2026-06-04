@@ -217,8 +217,8 @@ const WORDS = window.WORDS;
 /* 레벨별 파라미터: 낙하속도(px/s), 생성간격(ms) */
 function levelParams(lv){
   return {
-    speed: (28 + lv*9) * 0.5,         // 낙하 속도 (기존의 50%로 완화)
-    spawn: Math.max(950, 2600 - lv*170) // 점점 자주
+    speed: (28 + lv*9) * 0.5,            // 낙하 속도 (기존의 50%로 완화)
+    spawn: Math.max(1500, 3300 - lv*190) // 단어 출현 간격도 넓혀 타이핑 여유 확대
   };
 }
 const TIER = lv => lv<=2?1 : lv<=4?2 : lv<=7?3 : 4;
