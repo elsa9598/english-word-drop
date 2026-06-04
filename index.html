@@ -335,15 +335,57 @@ if('speechSynthesis' in window){
   pickVoice();
   speechSynthesis.onvoiceschanged = pickVoice;
 }
-/* 단어의 예문·번역·문법 설명. 데이터에 없으면 학습용 폴백을 생성. */
+/* 한글 받침에 따라 조사 선택 (받침O → a, 받침X → b) */
+function josa(word, a, b){
+  const c = word.charCodeAt(word.length-1);
+  const hasJong = (c>=0xAC00 && c<=0xD7A3) ? ((c-0xAC00)%28 !== 0) : false;
+  return hasJong ? a : b;
+}
+/* 한글 뜻 + 영어 형태로 품사 추정 (noun / verb / adj) */
+function guessPos(en, ko){
+  const k = ko[0] || '';
+  const adjSuf = /(ous|ful|ive|ic|ical|able|ible|ant|ent|less|ish|ary|ate|al)$/;
+  if(/다$/.test(k)){
+    if(/(ous|ful|ive|ic|ical|able|ible)$/.test(en)) return 'adj'; // 깨끗하다류 형용사
+    return 'verb';
+  }
+  if(adjSuf.test(en)) return 'adj';
+  const c = k.charCodeAt(k.length-1);
+  const jong = (c>=0xAC00 && c<=0xD7A3) ? ((c-0xAC00)%28) : -1;
+  if(jong===4 && k.length<=4) return 'adj';   // 관형형(큰·작은·행복한 등) ㄴ받침
+  return 'noun';
+}
+/* 단어의 예문·번역·문법 설명. 데이터에 없으면 품사별 자연스러운 용례를 생성. */
 function getExample(en, ko){
   const ex = (window.EXAMPLES && window.EXAMPLES[en]);
   if(ex) return {sent:ex[0], trans:ex[1], gram:ex[2]};
-  return {
-    sent:`I learned the word "${en}" today.`,
-    trans:`나는 오늘 "${en}"(${ko[0]})(이)라는 단어를 배웠다.`,
-    gram:`과거시제예요(learn→learned). 이 문장 틀에 단어를 넣어 직접 말해 보며 익혀요.`
-  };
+  const M = ko[0] || en;
+  const pos = guessPos(en, ko);
+  const pick = arr => arr[en.length % arr.length];
+  if(pos === 'noun'){
+    const t = pick([
+      [`Where is the ${en}?`, `${M}${josa(M,'은','는')} 어디 있어요?`],
+      [`I need a ${en}.`, `${M}${josa(M,'이','가')} 필요해요.`],
+      [`This ${en} is mine.`, `이 ${M}${josa(M,'은','는')} 제 거예요.`],
+      [`Look at that ${en}!`, `저 ${M} 좀 보세요!`]
+    ]);
+    return {sent:t[0], trans:t[1], gram:`'${en}'은(는) 명사예요. 'a/the ${en}'처럼 관사와 함께 쓰거나, 여럿이면 '${en}s'로 씁니다.`};
+  }
+  if(pos === 'adj'){
+    const t = pick([
+      [`It is a very ${en} day.`, `정말 ${M} 하루예요.`],
+      [`That sounds ${en}.`, `그거 ${M} 것 같네요.`],
+      [`She has a ${en} smile.`, `${M} 미소를 지녔어요.`]
+    ]);
+    return {sent:t[0], trans:t[1], gram:`'${en}'은(는) 형용사예요. 명사 앞에서 꾸미거나 'be동사 + ${en}' 형태로 상태를 나타냅니다.`};
+  }
+  const stem = M.replace(/다$/, '');
+  const t = pick([
+    [`I want to ${en} every day.`, `매일 ${stem}고 싶어요.`],
+    [`I like to ${en}.`, `저는 ${stem}는 걸 좋아해요.`],
+    [`Let's ${en} together.`, `같이 ${stem}고 싶어요.`]
+  ]);
+  return {sent:t[0], trans:t[1], gram:`'${en}'은(는) 동사예요. 'to ${en}'(부정사) 형태로 쓰거나 주어·시제에 맞춰 활용합니다.`};
 }
 
 function speakWord(text, force){
