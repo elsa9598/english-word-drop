@@ -29,6 +29,7 @@
     background:radial-gradient(circle at 50% -10%,#1b2a5e 0%,var(--bg) 55%);
     color:var(--text); display:flex; flex-direction:column; height:100dvh;
     user-select:none; touch-action:manipulation;
+    position:relative; overflow:hidden;   /* 오버레이(사전 등)가 '보이는 영역'에 맞춰지도록 기준점 */
   }
 
   /* ===== HUD ===== */
