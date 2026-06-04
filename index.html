@@ -453,7 +453,7 @@ function startGame(level, review){
   }
   state = {
     level, review:!!review, score:0, blocks:[], bricks:[], deadWords:[],
-    lastSpawn:0, t0:performance.now(), prev:performance.now(),
+    lastSpawn:0, nextSpawnAt:0, t0:performance.now(), prev:performance.now(),
     paused:false, running:true, pool, usedIdx:0,
     popped:0, committed:false, newRecord:false, relearned:0
   };
@@ -505,9 +505,10 @@ function loop(now){
   if(!state || !state.running) return;
   if(state.paused){ state.raf=requestAnimationFrame(loop); state.prev=now; return; }
   const dt=(now-state.prev)/1000; state.prev=now;
-  const {speed,spawn:spawnInt}=levelParams(state.level);
+  const {speed}=levelParams(state.level);
 
-  if(now-state.lastSpawn>spawnInt){ spawn(); state.lastSpawn=now; }
+  // 한 번에 한 단어만: 화면이 비고 잠깐의 텀이 지나면 다음 단어가 내려옴
+  if(state.blocks.length===0 && now>=state.nextSpawnAt){ spawn(); }
 
   const floorY=field.clientHeight-20;
   for(let i=state.blocks.length-1;i>=0;i--){
@@ -516,10 +517,11 @@ function loop(now){
     b.el.style.top=b.y+'px';
     if(b.y>floorY*0.7) b.el.classList.add('danger'); else b.el.classList.remove('danger');
     if(b.y>=floorY){
-      // 바닥 도달 → 벽돌로
+      // 바닥 도달 → 벽돌로 쌓고, 잠깐 뒤 다음 단어
       b.el.remove();
       state.blocks.splice(i,1);
       addBrick(b);
+      state.nextSpawnAt = now + 450;
     }
   }
   updateHUD();
@@ -554,6 +556,7 @@ function submit(){
     const b=state.blocks[target];
     popBlock(b);
     state.blocks.splice(target,1);
+    state.nextSpawnAt = performance.now() + 450;   // 맞히면 잠깐 뒤 다음 단어
     const gain=10*state.level + Math.floor(b.y<0?0:b.y/20);
     state.score+=Math.max(10,gain);
     state.popped++;
